@@ -17,9 +17,9 @@
 
     <p class="question">придёшь ко мне в гости<br />пить пиво и смотреть фильм?</p>
 
-    <div class="buttons-area">
-      <!-- Кнопка "да" растёт через scale — GPU анимация, без скачков -->
+    <div ref="buttonsAreaRef" class="buttons-area">
       <button
+          ref="yesBtnRef"
           class="btn btn-yes"
           :style="{ transform: `scale(${yesScale})` }"
           @click="sayYes"
@@ -27,7 +27,6 @@
         да 🍻
       </button>
 
-      <!-- Кнопка "нет" всегда fixed, изначально под кнопкой "да" -->
       <button
           v-if="!noGone"
           ref="noBtnRef"
@@ -42,7 +41,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, nextTick } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 
 const NO_TEXTS = [
   'нет',
@@ -57,63 +56,159 @@ const NO_TEXTS = [
   'кнопка сломалась, жми ДА',
 ]
 
-const won      = ref(false)
-const noCount  = ref(0)
+const won = ref(false)
+const noCount = ref(0)
 const noBtnRef = ref(null)
-const noPos    = ref({ x: 0, y: 0 })
-const noReady  = ref(false)
+const yesBtnRef = ref(null)
+const buttonsAreaRef = ref(null)
 
-// scale растёт — никаких изменений font-size или padding
+const noPos = ref({ x: 0, y: 0 })
+const noReady = ref(false)
+
 const yesScale = computed(() => Math.min(1 + noCount.value * 0.3, 4))
-const noScale  = computed(() => Math.max(1 - noCount.value * 0.06, 0.55))
-const noGone   = computed(() => noCount.value >= NO_TEXTS.length)
-const noLabel  = computed(() => NO_TEXTS[Math.min(noCount.value, NO_TEXTS.length - 1)])
+const noScale = computed(() => Math.max(1 - noCount.value * 0.06, 0.55))
+const noGone = computed(() => noCount.value >= NO_TEXTS.length)
+const noLabel = computed(() => NO_TEXTS[Math.min(noCount.value, NO_TEXTS.length - 1)])
 
 const noStyle = computed(() => ({
-  position:   'fixed',
-  left:       `${noPos.value.x}px`,
-  top:        `${noPos.value.y}px`,
-  transform:  `scale(${noScale.value})`,
-  transformOrigin: 'top left',
-  opacity:    noReady.value ? 1 : 0,
-  transition: noCount.value === 0
-      ? 'opacity 0.2s'
-      : 'left 0.35s cubic-bezier(.34,1.4,.64,1), top 0.35s cubic-bezier(.34,1.4,.64,1), transform 0.3s ease',
+  position: 'fixed',
+  left: `${noPos.value.x}px`,
+  top: `${noPos.value.y}px`,
+  transform: `scale(${noScale.value})`,
+  transformOrigin: 'center center',
+  opacity: noReady.value ? 1 : 0,
+  transition:
+      noCount.value === 0
+          ? 'opacity 0.2s ease'
+          : 'left 0.35s cubic-bezier(.34,1.4,.64,1), top 0.35s cubic-bezier(.34,1.4,.64,1), transform 0.3s ease, opacity 0.2s ease',
 }))
 
-onMounted(async () => {
-  await nextTick()
-  // Ставим "нет" сразу под "да" по центру экрана
-  const w = window.innerWidth
-  const h = window.innerHeight
-  const btnW = noBtnRef.value?.offsetWidth  ?? 100
-  const btnH = noBtnRef.value?.offsetHeight ?? 44
-  noPos.value = {
-    x: w / 2 - btnW / 2 + 80, // чуть правее кнопки "да"
-    y: h / 2 - btnH / 2,
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function getViewportSize() {
+  const vv = window.visualViewport
+  if (vv) {
+    return {
+      width: vv.width,
+      height: vv.height,
+      offsetLeft: vv.offsetLeft,
+      offsetTop: vv.offsetTop,
+    }
   }
+
+  return {
+    width: window.innerWidth,
+    height: window.innerHeight,
+    offsetLeft: 0,
+    offsetTop: 0,
+  }
+}
+
+function getScaledSize() {
+  const btn = noBtnRef.value
+  if (!btn) return { width: 140, height: 48 }
+
+  const rect = btn.getBoundingClientRect()
+  const scale = noScale.value || 1
+
+  return {
+    width: rect.width * scale,
+    height: rect.height * scale,
+  }
+}
+
+function placeNoInitially() {
+  const yesBtn = yesBtnRef.value
+  const noBtn = noBtnRef.value
+  const area = buttonsAreaRef.value
+  if (!yesBtn || !noBtn || !area) return
+
+  const yesRect = yesBtn.getBoundingClientRect()
+  const areaRect = area.getBoundingClientRect()
+  const { width: btnW, height: btnH } = getScaledSize()
+  const { width: vpW, height: vpH, offsetLeft, offsetTop } = getViewportSize()
+
+  const gap = 16
+  const idealX = yesRect.right + gap
+  const idealY = yesRect.top + yesRect.height / 2 - btnH / 2
+
+  noPos.value = {
+    x: clamp(idealX + offsetLeft, 12 + offsetLeft, vpW - btnW - 12 + offsetLeft),
+    y: clamp(
+        idealY + offsetTop,
+        Math.max(12 + offsetTop, areaRect.top + offsetTop),
+        Math.min(vpH - btnH - 12 + offsetTop, areaRect.bottom - btnH + offsetTop)
+    ),
+  }
+}
+
+function moveNoRandomly() {
+  const area = buttonsAreaRef.value
+  const noBtn = noBtnRef.value
+  if (!area || !noBtn) return
+
+  const areaRect = area.getBoundingClientRect()
+  const { width: btnW, height: btnH } = getScaledSize()
+  const { width: vpW, height: vpH, offsetLeft, offsetTop } = getViewportSize()
+  const margin = 12
+
+  const minX = Math.max(margin + offsetLeft, areaRect.left + offsetLeft)
+  const maxX = Math.min(vpW - btnW - margin + offsetLeft, areaRect.right - btnW + offsetLeft)
+
+  const minY = Math.max(margin + offsetTop, areaRect.top + offsetTop)
+  const maxY = Math.min(vpH - btnH - margin + offsetTop, areaRect.bottom - btnH + offsetTop)
+
+  noPos.value = {
+    x: clamp(minX + Math.random() * Math.max(maxX - minX, 0), minX, maxX),
+    y: clamp(minY + Math.random() * Math.max(maxY - minY, 0), minY, maxY),
+  }
+}
+
+async function updateInitialPosition() {
+  await nextTick()
+  placeNoInitially()
   noReady.value = true
-})
+}
 
 async function sayNo() {
   noCount.value++
   await nextTick()
 
-  const margin = 20
-  const w = window.innerWidth
-  const h = window.innerHeight
-  const btnW = (noBtnRef.value?.offsetWidth  ?? 100) * noScale.value
-  const btnH = (noBtnRef.value?.offsetHeight ?? 44)  * noScale.value
-
-  noPos.value = {
-    x: margin + Math.random() * (w - btnW - margin * 2),
-    y: margin + Math.random() * (h - btnH - margin * 2),
-  }
+  if (noGone.value) return
+  moveNoRandomly()
 }
 
 function sayYes() {
   won.value = true
 }
+
+function handleViewportChange() {
+  if (won.value || noGone.value) return
+
+  if (noCount.value === 0) {
+    placeNoInitially()
+  } else {
+    moveNoRandomly()
+  }
+}
+
+onMounted(async () => {
+  await updateInitialPosition()
+
+  window.addEventListener('resize', handleViewportChange)
+  window.addEventListener('orientationchange', handleViewportChange)
+  window.visualViewport?.addEventListener('resize', handleViewportChange)
+  window.visualViewport?.addEventListener('scroll', handleViewportChange)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleViewportChange)
+  window.removeEventListener('orientationchange', handleViewportChange)
+  window.visualViewport?.removeEventListener('resize', handleViewportChange)
+  window.visualViewport?.removeEventListener('scroll', handleViewportChange)
+})
 </script>
 
 <style>
@@ -151,13 +246,14 @@ html, body {
 .bubble:nth-child(6) { width:30px;  height:30px;  left:5%;  background:#a78bfa; animation-duration:12s; animation-delay:3s; }
 
 @keyframes float {
-  0%   { transform: translateY(0) rotate(0deg);    opacity: 0.12; }
+  0%   { transform: translateY(0) rotate(0deg); opacity: 0.12; }
   100% { transform: translateY(-110vh) rotate(720deg); opacity: 0; }
 }
 
 .scene {
   position: relative; z-index: 1;
-  height: 100vh;
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   padding: 24px; text-align: center; gap: 48px;
@@ -169,7 +265,7 @@ html, body {
 }
 @keyframes bob {
   0%, 100% { transform: translateY(0); }
-  50%       { transform: translateY(-10px); }
+  50% { transform: translateY(-10px); }
 }
 
 .question {
@@ -182,41 +278,50 @@ html, body {
   background-clip: text;
 }
 
-/* Фиксированная высота — "да" стоит на месте */
 .buttons-area {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 80px;
+  min-height: 120px;
+  width: min(100%, 520px);
 }
 
 .btn {
   font-family: 'Unbounded', sans-serif;
-  font-weight: 700; border: none;
-  border-radius: 999px; cursor: pointer;
-  line-height: 1.2; white-space: nowrap;
+  font-weight: 700;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  line-height: 1.2;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .btn-yes {
+  width: 144px;
+  height: 52px;
   font-size: 18px;
-  padding: 14px 36px;
+  padding: 0 24px;
   background: var(--yes);
   color: #1a1a2e;
   box-shadow: 0 4px 24px rgba(247,201,72,0.35);
-  /* только transform — плавно на GPU */
   transition: transform 0.4s cubic-bezier(.34,1.56,.64,1), box-shadow 0.2s ease;
   transform-origin: center;
 }
 .btn-yes:active { filter: brightness(0.9); }
 
 .btn-no {
+  width: 220px;
+  height: 48px;
   font-size: 16px;
-  padding: 12px 28px;
+  padding: 0 18px;
   background: var(--no);
   color: #a0a0c0;
   border: 1px solid rgba(255,255,255,0.08);
   box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-  transform-origin: top left;
+  will-change: left, top, transform;
 }
 .btn-no:active { filter: brightness(1.2); }
 
@@ -238,6 +343,25 @@ html, body {
 .win-leave-active { animation: winPop 0.3s reverse ease-in; }
 @keyframes winPop {
   from { opacity: 0; transform: scale(0.85); }
-  to   { opacity: 1; transform: scale(1); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (max-width: 480px) {
+  .buttons-area {
+    min-height: 132px;
+    width: min(100%, 340px);
+  }
+
+  .btn-yes {
+    width: 136px;
+    height: 50px;
+    font-size: 17px;
+  }
+
+  .btn-no {
+    width: 196px;
+    height: 46px;
+    font-size: 15px;
+  }
 }
 </style>

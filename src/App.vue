@@ -55,19 +55,16 @@ const NO_TEXTS = [
   'кнопка сломалась, жми ДА',
 ]
 
-const won      = ref(false)
-const noCount  = ref(0)
-const noMoved  = ref(false)
-const noPlaced = ref(false) // true после первого размещения — включает transition
-const noPos    = ref({ x: 0, y: 0 })
+const won       = ref(false)
+const noCount   = ref(0)
+const noMoved   = ref(false)
+const noVisible = ref(false)
+const noPos     = ref({ x: 0, y: 0 })
 
-// "да" растёт максимум до 2.5x — не вылезет за экран
-const yesScale = computed(() => Math.min(1 + (noMoved.value ? noCount.value + 1 : 0) * 0.2, 2.5))
-
+const yesScale     = computed(() => Math.min(1 + (noMoved.value ? noCount.value + 1 : 0) * 0.2, 2.5))
 const noFloatScale = computed(() => Math.max(1 - noCount.value * 0.07, 0.5))
-
-const noGone  = computed(() => noCount.value >= NO_TEXTS.length)
-const noLabel = computed(() => NO_TEXTS[Math.min(noCount.value, NO_TEXTS.length - 1)])
+const noGone       = computed(() => noCount.value >= NO_TEXTS.length)
+const noLabel      = computed(() => NO_TEXTS[Math.min(noCount.value, NO_TEXTS.length - 1)])
 
 const floatingStyle = computed(() => ({
   position: 'fixed',
@@ -75,25 +72,17 @@ const floatingStyle = computed(() => ({
   top:  `${noPos.value.y}px`,
   transform: `scale(${noFloatScale.value})`,
   transformOrigin: 'top left',
-  // transition только после первого размещения, чтобы не анимировать из (0,0)
-  transition: noPlaced.value
-      ? 'left 0.35s cubic-bezier(.34,1.4,.64,1), top 0.35s cubic-bezier(.34,1.4,.64,1)'
-      : 'none',
+  transition: 'left 0.35s cubic-bezier(.34,1.4,.64,1), top 0.35s cubic-bezier(.34,1.4,.64,1), opacity 0.15s',
+  opacity: noVisible.value ? 1 : 0,
   zIndex: 50,
 }))
 
 async function sayNo() {
   if (!noMoved.value) {
     noMoved.value = true
-    await nextTick()
-    // Сначала ставим кнопку без transition — она появляется на месте
     placeRandom()
-    // Ждём два кадра: первый — браузер рендерит позицию, второй — включаем transition
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        noPlaced.value = true
-      })
-    })
+    await nextTick()
+    noVisible.value = true
   } else {
     noCount.value++
     await nextTick()

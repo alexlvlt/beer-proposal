@@ -19,8 +19,9 @@
 
     <div class="buttons-area">
       <button
+          ref="yesBtnRef"
           class="btn btn-yes"
-          :style="{ '--size': yesScale }"
+          :style="yesBtnStyle"
           @click="sayYes"
       >
         да 🍻
@@ -28,6 +29,7 @@
 
       <button
           v-if="!noGone"
+          ref="noBtnRef"
           class="btn btn-no"
           :style="noStyle"
           @click="sayNo"
@@ -39,8 +41,7 @@
 </template>
 
 <script setup>
-
-import {computed, ref} from "vue";
+import { computed, ref, nextTick } from 'vue'
 
 const NO_TEXTS = [
   'нет',
@@ -55,19 +56,29 @@ const NO_TEXTS = [
   'кнопка сломалась, жми ДА',
 ]
 
-const won     = ref(false)
-const noCount = ref(0)
-const noPos   = ref({ x: null, y: null }) // null = normal flow
+const won      = ref(false)
+const noCount  = ref(0)
+const noPos    = ref({ x: null, y: null })
+const noBtnRef = ref(null)
 
-const yesScale = computed(() => Math.min(1 + noCount.value * 0.22, 4.5))
-const noScale  = computed(() => Math.max(1 - noCount.value * 0.06, 0.55))
-const noGone   = computed(() => noCount.value >= NO_TEXTS.length)
-const noLabel  = computed(() => NO_TEXTS[Math.min(noCount.value, NO_TEXTS.length - 1)])
+// Явные пиксельные значения вместо CSS-переменной — надёжнее на Safari/iOS
+const yesFontSize = computed(() => Math.min(18 * (1 + noCount.value * 0.22), 18 * 4.5))
+const yesPadV     = computed(() => Math.min(14 * (1 + noCount.value * 0.22), 14 * 4.5))
+const yesPadH     = computed(() => Math.min(36 * (1 + noCount.value * 0.22), 36 * 4.5))
+
+const yesBtnStyle = computed(() => ({
+  fontSize: `${yesFontSize.value}px`,
+  padding:  `${yesPadV.value}px ${yesPadH.value}px`,
+}))
+
+const noScale = computed(() => Math.max(1 - noCount.value * 0.06, 0.55))
+const noGone  = computed(() => noCount.value >= NO_TEXTS.length)
+const noLabel = computed(() => NO_TEXTS[Math.min(noCount.value, NO_TEXTS.length - 1)])
 
 const noStyle = computed(() => {
   const base = {
-    fontSize:  `${16 * noScale.value}px`,
-    padding:   `${12 * noScale.value}px ${28 * noScale.value}px`,
+    fontSize: `${16 * noScale.value}px`,
+    padding:  `${12 * noScale.value}px ${28 * noScale.value}px`,
   }
   if (noPos.value.x !== null) {
     return {
@@ -82,14 +93,23 @@ const noStyle = computed(() => {
   return base
 })
 
-function sayNo() {
+async function sayNo() {
   noCount.value++
-  const margin = 60
+
+  // Ждём nextTick чтобы получить актуальный размер кнопки после shrink
+  await nextTick()
+
+  const margin = 16
   const w = window.innerWidth
   const h = window.innerHeight
+
+  // Учитываем реальный размер кнопки — она не выйдет за край
+  const btnW = noBtnRef.value?.offsetWidth  ?? 80
+  const btnH = noBtnRef.value?.offsetHeight ?? 40
+
   noPos.value = {
-    x: margin + Math.random() * (w - margin * 2),
-    y: margin + Math.random() * (h - margin * 2),
+    x: margin + Math.random() * (w - btnW - margin * 2),
+    y: margin + Math.random() * (h - btnH - margin * 2),
   }
 }
 
@@ -118,7 +138,6 @@ html, body {
   overflow: hidden;
 }
 
-/* Bubbles */
 .bg-bubbles {
   position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
 }
@@ -141,7 +160,6 @@ html, body {
   100% { transform: translateY(-110vh) rotate(720deg); opacity: 0; }
 }
 
-/* Scene */
 .scene {
   position: relative; z-index: 1;
   height: 100vh;
@@ -193,30 +211,27 @@ html, body {
 }
 
 .btn-yes {
-  font-size: calc(18px * var(--size, 1));
-  padding: calc(14px * var(--size, 1)) calc(36px * var(--size, 1));
   background: var(--yes);
   color: #1a1a2e;
   box-shadow: 0 4px 24px rgba(247,201,72,0.35);
+  /* убрали transform из transition — он конфликтовал с размером на Safari */
   transition: font-size 0.35s cubic-bezier(.34,1.56,.64,1),
   padding   0.35s cubic-bezier(.34,1.56,.64,1),
-  transform 0.2s ease,
   box-shadow 0.2s ease;
 }
-.btn-yes:hover { transform: scale(1.06); box-shadow: 0 8px 36px rgba(247,201,72,0.6); }
-.btn-yes:active { transform: scale(0.98); }
+.btn-yes:hover { box-shadow: 0 8px 36px rgba(247,201,72,0.6); }
+.btn-yes:active { opacity: 0.85; }
 
 .btn-no {
   background: var(--no);
   color: #a0a0c0;
   border: 1px solid rgba(255,255,255,0.08);
   box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-  transition: font-size 0.3s, padding 0.3s, background 0.2s, transform 0.2s;
+  transition: font-size 0.3s, padding 0.3s, background 0.2s;
 }
-.btn-no:hover { background: #3a3a4e; transform: scale(1.03); }
-.btn-no:active { transform: scale(0.97); }
+.btn-no:hover { background: #3a3a4e; }
+.btn-no:active { opacity: 0.85; }
 
-/* Win overlay */
 .win-overlay {
   position: fixed; inset: 0; z-index: 100;
   background: rgba(10,10,26,0.92);

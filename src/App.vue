@@ -14,7 +14,7 @@
 
   <main class="scene">
     <span class="emoji-float">🍺🎬</span>
-    <p class="question">Паша, придёшь ко мне в гости<br />пить пиво и смотреть фильм?</p>
+    <p class="question">Паша, придёшь ко мне в гости пить пиво и смотреть фильм?</p>
 
     <div class="buttons-area">
       <button
@@ -60,7 +60,7 @@ const NO_TEXTS = [
   'окей, я уточняю',
   'ты уверен, Паша?',
   'нет - не вариант',
-  'кнопка сломалась, жми ДА',
+  'заебал, жми ДА',
 ]
 
 const won = ref(false)

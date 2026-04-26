@@ -55,15 +55,15 @@ const NO_TEXTS = [
   'кнопка сломалась, жми ДА',
 ]
 
-const won     = ref(false)
-const noCount = ref(0)  // считает нажатия после первого
-const noMoved = ref(false)
-const noPos   = ref({ x: 0, y: 0 })
+const won      = ref(false)
+const noCount  = ref(0)
+const noMoved  = ref(false)
+const noPlaced = ref(false) // true после первого размещения — включает transition
+const noPos    = ref({ x: 0, y: 0 })
 
-// "да" растёт с каждым нажатием "нет"
-const yesScale = computed(() => Math.min(1 + (noMoved.value ? noCount.value + 1 : 0) * 0.3, 4))
+// "да" растёт максимум до 2.5x — не вылезет за экран
+const yesScale = computed(() => Math.min(1 + (noMoved.value ? noCount.value + 1 : 0) * 0.2, 2.5))
 
-// floating "нет" уменьшается
 const noFloatScale = computed(() => Math.max(1 - noCount.value * 0.07, 0.5))
 
 const noGone  = computed(() => noCount.value >= NO_TEXTS.length)
@@ -75,19 +75,25 @@ const floatingStyle = computed(() => ({
   top:  `${noPos.value.y}px`,
   transform: `scale(${noFloatScale.value})`,
   transformOrigin: 'top left',
-  transition: 'left 0.35s cubic-bezier(.34,1.4,.64,1), top 0.35s cubic-bezier(.34,1.4,.64,1)',
+  // transition только после первого размещения, чтобы не анимировать из (0,0)
+  transition: noPlaced.value
+      ? 'left 0.35s cubic-bezier(.34,1.4,.64,1), top 0.35s cubic-bezier(.34,1.4,.64,1)'
+      : 'none',
   zIndex: 50,
 }))
 
 async function sayNo() {
   if (!noMoved.value) {
-    // Первое нажатие — убираем из потока, появляется floating
     noMoved.value = true
+    await nextTick()
+    placeRandom()          // телепортируем без анимации на случайное место
+    await nextTick()
+    noPlaced.value = true  // теперь следующие нажатия будут с плавной анимацией
   } else {
     noCount.value++
+    await nextTick()
+    placeRandom()
   }
-  await nextTick()
-  placeRandom()
 }
 
 function placeRandom() {

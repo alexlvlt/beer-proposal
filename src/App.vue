@@ -247,15 +247,15 @@ onBeforeUnmount(() => {
   src: url('./assets/fonts/Unbounded-Regular.ttf') format('truetype');
   font-weight: 400;
   font-style: normal;
-  font-display: swap;
+  font-display: block;
 }
 
 @font-face {
   font-family: 'Unbounded';
   src: url('./assets/fonts/Unbounded-Bold.ttf') format('truetype');
-  font-weight: 400;
+  font-weight: 700;
   font-style: normal;
-  font-display: swap;
+  font-display: block;
 }
 
 @font-face {
@@ -263,7 +263,7 @@ onBeforeUnmount(() => {
   src: url('./assets/fonts/Nunito-Regular.ttf') format('truetype');
   font-weight: 400;
   font-style: normal;
-  font-display: swap;
+  font-display: block;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

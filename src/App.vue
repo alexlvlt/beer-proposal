@@ -6,7 +6,7 @@
   <Transition name="win">
     <div v-if="won" class="win-overlay">
       <div class="confetti-row">🎉🍺🎬🎉</div>
-      <div class="win-title">ура!! 🎊</div>
+      <div class="win-title">ура! 🎊</div>
       <div class="win-sub">договорились, жду тебя 🥳</div>
       <div class="confetti-row" style="font-size:2rem">🍿🛋️🌙✨</div>
     </div>
@@ -14,7 +14,7 @@
 
   <main class="scene">
     <span class="emoji-float">🍺🎬</span>
-    <p class="question">придёшь ко мне в гости<br />пить пиво и смотреть фильм?</p>
+    <p class="question">Паша, придёшь ко мне в гости<br />пить пиво и смотреть фильм?</p>
 
     <div class="buttons-area">
       <button
@@ -52,14 +52,14 @@
 import { computed, ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
 
 const NO_TEXTS = [
-  'ну пожалуйста…',
-  'ну серьёзно??',
+  'ты че',
+  'серьёзно? обалдел?',
   'подумай ещё раз',
-  'я обижусь 😢',
+  'обещаю не напиваться',
   'последний шанс',
   'окей, я уточняю',
-  'ты уверен(а)?',
-  'нет — не вариант 😤',
+  'ты уверен, Паша?',
+  'нет - не вариант',
   'кнопка сломалась, жми ДА',
 ]
 
@@ -373,7 +373,7 @@ html, body {
 }
 .win-title {
   font-family: 'Unbounded', sans-serif;
-  font-size: clamp(28px, 6vw, 56px); font-weight: 900;
+  font-size: clamp(28px, 6vw, 56px); font-weight: 700;
   color: var(--yes); text-shadow: 0 0 40px rgba(247,201,72,0.7);
 }
 .win-sub { font-size: clamp(16px, 3vw, 22px); color: #c0b8e8; }

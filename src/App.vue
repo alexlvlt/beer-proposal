@@ -17,17 +17,17 @@
 
     <p class="question">придёшь ко мне в гости<br />пить пиво и смотреть фильм?</p>
 
-    <!-- Контейнер фиксированного размера — кнопка "да" не двигается -->
     <div class="buttons-area">
+      <!-- Кнопка "да" растёт через scale — GPU анимация, без скачков -->
       <button
           class="btn btn-yes"
-          :style="yesBtnStyle"
+          :style="{ transform: `scale(${yesScale})` }"
           @click="sayYes"
       >
         да 🍻
       </button>
 
-      <!-- Кнопка "нет" всегда fixed, просто сначала в центре под "да" -->
+      <!-- Кнопка "нет" всегда fixed, изначально под кнопкой "да" -->
       <button
           v-if="!noGone"
           ref="noBtnRef"
@@ -60,69 +60,50 @@ const NO_TEXTS = [
 const won      = ref(false)
 const noCount  = ref(0)
 const noBtnRef = ref(null)
+const noPos    = ref({ x: 0, y: 0 })
+const noReady  = ref(false)
 
-// Начальная позиция кнопки "нет" — вычислим после монтирования
-const noPos = ref({ x: 0, y: 0 })
-const noReady = ref(false) // показываем кнопку только после того как знаем позицию
+// scale растёт — никаких изменений font-size или padding
+const yesScale = computed(() => Math.min(1 + noCount.value * 0.3, 4))
+const noScale  = computed(() => Math.max(1 - noCount.value * 0.06, 0.55))
+const noGone   = computed(() => noCount.value >= NO_TEXTS.length)
+const noLabel  = computed(() => NO_TEXTS[Math.min(noCount.value, NO_TEXTS.length - 1)])
 
-const noGone  = computed(() => noCount.value >= NO_TEXTS.length)
-const noLabel = computed(() => NO_TEXTS[Math.min(noCount.value, NO_TEXTS.length - 1)])
-const noScale = computed(() => Math.max(1 - noCount.value * 0.06, 0.55))
-
-// Кнопка "нет" всегда fixed — никогда не влияет на поток
 const noStyle = computed(() => ({
-  fontSize:   `${16 * noScale.value}px`,
-  padding:    `${12 * noScale.value}px ${28 * noScale.value}px`,
   position:   'fixed',
   left:       `${noPos.value.x}px`,
   top:        `${noPos.value.y}px`,
+  transform:  `scale(${noScale.value})`,
+  transformOrigin: 'top left',
   opacity:    noReady.value ? 1 : 0,
   transition: noCount.value === 0
-      ? 'font-size 0.3s, padding 0.3s, opacity 0.2s'
-      : 'left 0.3s cubic-bezier(.34,1.4,.64,1), top 0.3s cubic-bezier(.34,1.4,.64,1), font-size 0.3s, padding 0.3s',
-  zIndex: 50,
+      ? 'opacity 0.2s'
+      : 'left 0.35s cubic-bezier(.34,1.4,.64,1), top 0.35s cubic-bezier(.34,1.4,.64,1), transform 0.3s ease',
 }))
 
-// Кнопка "да" — только размер меняется, позиция не трогается
-const yesFontSize = computed(() => Math.min(18 * (1 + noCount.value * 0.22), 18 * 4.5))
-const yesPadV     = computed(() => Math.min(14 * (1 + noCount.value * 0.22), 14 * 4.5))
-const yesPadH     = computed(() => Math.min(36 * (1 + noCount.value * 0.22), 36 * 4.5))
-
-const yesBtnStyle = computed(() => ({
-  fontSize: `${yesFontSize.value}px`,
-  padding:  `${yesPadV.value}px ${yesPadH.value}px`,
-}))
-
-// После монтирования ставим кнопку "нет" рядом с "да" по центру
 onMounted(async () => {
   await nextTick()
-  placeNoInitial()
-})
-
-function placeNoInitial() {
-  const btn = noBtnRef.value
-  if (!btn) return
-  const btnW = btn.offsetWidth
-  const btnH = btn.offsetHeight
+  // Ставим "нет" сразу под "да" по центру экрана
   const w = window.innerWidth
   const h = window.innerHeight
-  // Чуть правее и ниже центра — рядом с кнопкой "да"
+  const btnW = noBtnRef.value?.offsetWidth  ?? 100
+  const btnH = noBtnRef.value?.offsetHeight ?? 44
   noPos.value = {
-    x: w / 2 + 12,
-    y: h / 2 + 20,
+    x: w / 2 - btnW / 2 + 80, // чуть правее кнопки "да"
+    y: h / 2 - btnH / 2,
   }
   noReady.value = true
-}
+})
 
 async function sayNo() {
   noCount.value++
   await nextTick()
 
-  const margin = 16
+  const margin = 20
   const w = window.innerWidth
   const h = window.innerHeight
-  const btnW = noBtnRef.value?.offsetWidth  ?? 80
-  const btnH = noBtnRef.value?.offsetHeight ?? 40
+  const btnW = (noBtnRef.value?.offsetWidth  ?? 100) * noScale.value
+  const btnH = (noBtnRef.value?.offsetHeight ?? 44)  * noScale.value
 
   noPos.value = {
     x: margin + Math.random() * (w - btnW - margin * 2),
@@ -159,18 +140,15 @@ html, body {
   position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
 }
 .bubble {
-  position: absolute;
-  border-radius: 50%;
-  opacity: 0.12;
-  animation: float linear infinite;
-  bottom: -100px;
+  position: absolute; border-radius: 50%; opacity: 0.12;
+  animation: float linear infinite; bottom: -100px;
 }
-.bubble:nth-child(1) { width:80px;  height:80px;  left:10%; background:#f7c948; animation-duration:14s; animation-delay:0s;  }
-.bubble:nth-child(2) { width:40px;  height:40px;  left:25%; background:#a78bfa; animation-duration:18s; animation-delay:2s;  }
-.bubble:nth-child(3) { width:120px; height:120px; left:50%; background:#f7c948; animation-duration:22s; animation-delay:4s;  }
-.bubble:nth-child(4) { width:60px;  height:60px;  left:75%; background:#a78bfa; animation-duration:16s; animation-delay:1s;  }
-.bubble:nth-child(5) { width:90px;  height:90px;  left:88%; background:#f7c948; animation-duration:20s; animation-delay:6s;  }
-.bubble:nth-child(6) { width:30px;  height:30px;  left:5%;  background:#a78bfa; animation-duration:12s; animation-delay:3s;  }
+.bubble:nth-child(1) { width:80px;  height:80px;  left:10%; background:#f7c948; animation-duration:14s; animation-delay:0s; }
+.bubble:nth-child(2) { width:40px;  height:40px;  left:25%; background:#a78bfa; animation-duration:18s; animation-delay:2s; }
+.bubble:nth-child(3) { width:120px; height:120px; left:50%; background:#f7c948; animation-duration:22s; animation-delay:4s; }
+.bubble:nth-child(4) { width:60px;  height:60px;  left:75%; background:#a78bfa; animation-duration:16s; animation-delay:1s; }
+.bubble:nth-child(5) { width:90px;  height:90px;  left:88%; background:#f7c948; animation-duration:20s; animation-delay:6s; }
+.bubble:nth-child(6) { width:30px;  height:30px;  left:5%;  background:#a78bfa; animation-duration:12s; animation-delay:3s; }
 
 @keyframes float {
   0%   { transform: translateY(0) rotate(0deg);    opacity: 0.12; }
@@ -182,9 +160,7 @@ html, body {
   height: 100vh;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  padding: 24px;
-  text-align: center;
-  gap: 48px;
+  padding: 24px; text-align: center; gap: 48px;
 }
 
 .emoji-float {
@@ -199,16 +175,14 @@ html, body {
 .question {
   font-family: 'Unbounded', sans-serif;
   font-size: clamp(18px, 4vw, 32px);
-  font-weight: 700;
-  line-height: 1.4;
-  max-width: 600px;
+  font-weight: 700; line-height: 1.4; max-width: 600px;
   background: linear-gradient(135deg, #f0eaff 30%, #f7c948 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-/* Фиксированная высота — кнопка "да" не прыгает когда "нет" уходит в fixed */
+/* Фиксированная высота — "да" стоит на месте */
 .buttons-area {
   display: flex;
   align-items: center;
@@ -218,46 +192,44 @@ html, body {
 
 .btn {
   font-family: 'Unbounded', sans-serif;
-  font-weight: 700;
-  border: none;
-  border-radius: 999px;
-  cursor: pointer;
-  line-height: 1.2;
-  white-space: nowrap;
+  font-weight: 700; border: none;
+  border-radius: 999px; cursor: pointer;
+  line-height: 1.2; white-space: nowrap;
 }
 
 .btn-yes {
+  font-size: 18px;
+  padding: 14px 36px;
   background: var(--yes);
   color: #1a1a2e;
   box-shadow: 0 4px 24px rgba(247,201,72,0.35);
-  transition: font-size 0.35s cubic-bezier(.34,1.56,.64,1),
-  padding   0.35s cubic-bezier(.34,1.56,.64,1),
-  box-shadow 0.2s ease;
+  /* только transform — плавно на GPU */
+  transition: transform 0.4s cubic-bezier(.34,1.56,.64,1), box-shadow 0.2s ease;
+  transform-origin: center;
 }
-.btn-yes:hover { box-shadow: 0 8px 36px rgba(247,201,72,0.6); }
-.btn-yes:active { opacity: 0.85; }
+.btn-yes:active { filter: brightness(0.9); }
 
 .btn-no {
+  font-size: 16px;
+  padding: 12px 28px;
   background: var(--no);
   color: #a0a0c0;
   border: 1px solid rgba(255,255,255,0.08);
   box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  transform-origin: top left;
 }
-.btn-no:active { opacity: 0.85; }
+.btn-no:active { filter: brightness(1.2); }
 
 .win-overlay {
   position: fixed; inset: 0; z-index: 100;
   background: rgba(10,10,26,0.92);
   display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 24px;
+  align-items: center; justify-content: center; gap: 24px;
 }
 .win-title {
   font-family: 'Unbounded', sans-serif;
-  font-size: clamp(28px, 6vw, 56px);
-  font-weight: 900;
-  color: var(--yes);
-  text-shadow: 0 0 40px rgba(247,201,72,0.7);
+  font-size: clamp(28px, 6vw, 56px); font-weight: 900;
+  color: var(--yes); text-shadow: 0 0 40px rgba(247,201,72,0.7);
 }
 .win-sub { font-size: clamp(16px, 3vw, 22px); color: #c0b8e8; }
 .confetti-row { font-size: clamp(32px, 6vw, 54px); }

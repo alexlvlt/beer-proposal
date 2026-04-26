@@ -86,9 +86,14 @@ async function sayNo() {
   if (!noMoved.value) {
     noMoved.value = true
     await nextTick()
-    placeRandom()          // телепортируем без анимации на случайное место
-    await nextTick()
-    noPlaced.value = true  // теперь следующие нажатия будут с плавной анимацией
+    // Сначала ставим кнопку без transition — она появляется на месте
+    placeRandom()
+    // Ждём два кадра: первый — браузер рендерит позицию, второй — включаем transition
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        noPlaced.value = true
+      })
+    })
   } else {
     noCount.value++
     await nextTick()

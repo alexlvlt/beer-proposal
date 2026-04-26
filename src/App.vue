@@ -17,20 +17,28 @@
     <p class="question">придёшь ко мне в гости<br />пить пиво и смотреть фильм?</p>
 
     <div class="buttons-area">
-      <!-- Кнопка "да" — только она здесь, растёт через scale -->
-      <button class="btn btn-yes" :style="{ transform: `scale(${yesScale})` }" @click="sayYes">
+      <button
+          ref="yesBtnRef"
+          class="btn btn-yes"
+          :style="{ transform: `scale(${yesScale})` }"
+          @click="sayYes"
+      >
         да 🍻
       </button>
 
-      <!-- Кнопка "нет" в потоке — только до первого нажатия, потом v-if убирает её -->
-      <button v-if="!noMoved && !noGone" class="btn btn-no" @click="sayNo">
+      <button
+          v-if="!noMoved && !noGone"
+          ref="noStaticBtnRef"
+          class="btn btn-no"
+          @click="sayNo"
+      >
         нет
       </button>
     </div>
 
-    <!-- После первого нажатия — floating кнопка, единственная активная -->
     <button
         v-if="noMoved && !noGone"
+        ref="noBtnRef"
         class="btn btn-no"
         :style="floatingStyle"
         @click="sayNo"
@@ -41,7 +49,7 @@
 </template>
 
 <script setup>
-import { computed, ref, nextTick } from 'vue'
+import { computed, ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
 
 const NO_TEXTS = [
   'ну пожалуйста…',
@@ -55,56 +63,182 @@ const NO_TEXTS = [
   'кнопка сломалась, жми ДА',
 ]
 
-const won       = ref(false)
-const noCount   = ref(0)
-const noMoved   = ref(false)
+const won = ref(false)
+const noCount = ref(0)
+const noMoved = ref(false)
 const noVisible = ref(false)
-const noPos     = ref({ x: 0, y: 0 })
+const noPos = ref({ x: 0, y: 0 })
 
-const yesScale     = computed(() => Math.min(1 + (noMoved.value ? noCount.value + 1 : 0) * 0.2, 2.5))
+const yesBtnRef = ref(null)
+const noStaticBtnRef = ref(null)
+const noBtnRef = ref(null)
+
+const viewportWidth = ref(0)
+const yesBaseWidth = ref(0)
+
+const desiredYesScale = computed(() => 1 + (noMoved.value ? noCount.value + 1 : 0) * 0.2)
 const noFloatScale = computed(() => Math.max(1 - noCount.value * 0.07, 0.5))
-const noGone       = computed(() => noCount.value >= NO_TEXTS.length)
-const noLabel      = computed(() => NO_TEXTS[Math.min(noCount.value, NO_TEXTS.length - 1)])
+const noGone = computed(() => noCount.value >= NO_TEXTS.length)
+const noLabel = computed(() => NO_TEXTS[Math.min(noCount.value, NO_TEXTS.length - 1)])
+
+const yesScale = computed(() => {
+  const maxWidth = Math.max(viewportWidth.value - 32, 120)
+  const safeScale = yesBaseWidth.value > 0 ? maxWidth / yesBaseWidth.value : 2.5
+  return Math.max(1, Math.min(desiredYesScale.value, safeScale))
+})
 
 const floatingStyle = computed(() => ({
   position: 'fixed',
   left: `${noPos.value.x}px`,
-  top:  `${noPos.value.y}px`,
+  top: `${noPos.value.y}px`,
   transform: `scale(${noFloatScale.value})`,
   transformOrigin: 'top left',
-  transition: 'left 0.35s cubic-bezier(.34,1.4,.64,1), top 0.35s cubic-bezier(.34,1.4,.64,1), opacity 0.15s',
+  transition: 'left 0.35s cubic-bezier(.34,1.4,.64,1), top 0.35s cubic-bezier(.34,1.4,.64,1), transform 0.3s ease, opacity 0.15s',
   opacity: noVisible.value ? 1 : 0,
   zIndex: 50,
 }))
 
-async function sayNo() {
-  if (!noMoved.value) {
-    noMoved.value = true
-    placeRandom()
-    await nextTick()
-    noVisible.value = true
-  } else {
-    noCount.value++
-    await nextTick()
-    placeRandom()
+function getViewport() {
+  const vv = window.visualViewport
+
+  if (vv) {
+    return {
+      width: vv.width,
+      height: vv.height,
+      offsetLeft: vv.offsetLeft,
+      offsetTop: vv.offsetTop,
+    }
+  }
+
+  return {
+    width: window.innerWidth,
+    height: window.innerHeight,
+    offsetLeft: 0,
+    offsetTop: 0,
+  }
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function updateViewportMetrics() {
+  const viewport = getViewport()
+  viewportWidth.value = viewport.width
+
+  if (yesBtnRef.value) {
+    yesBaseWidth.value = yesBtnRef.value.offsetWidth || 0
+  }
+
+  if (noMoved.value && !noGone.value) {
+    clampFloatingButtonToViewport()
+  }
+}
+
+function getFloatingButtonSize() {
+  const btn = noBtnRef.value
+
+  if (!btn) {
+    return { width: 140, height: 48 }
+  }
+
+  return {
+    width: btn.offsetWidth * noFloatScale.value,
+    height: btn.offsetHeight * noFloatScale.value,
+  }
+}
+
+function setFloatingStartFromStatic() {
+  const source = noStaticBtnRef.value
+  const viewport = getViewport()
+
+  if (!source) {
+    return
+  }
+
+  const rect = source.getBoundingClientRect()
+
+  noPos.value = {
+    x: rect.left + viewport.offsetLeft,
+    y: rect.top + viewport.offsetTop,
   }
 }
 
 function placeRandom() {
+  const viewport = getViewport()
+  const { width: btnW, height: btnH } = getFloatingButtonSize()
   const margin = 20
-  const w = window.innerWidth
-  const h = window.innerHeight
-  const btnW = 140 * noFloatScale.value
-  const btnH = 48  * noFloatScale.value
+
+  const minX = viewport.offsetLeft + margin
+  const maxX = viewport.offsetLeft + viewport.width - btnW - margin
+  const minY = viewport.offsetTop + margin
+  const maxY = viewport.offsetTop + viewport.height - btnH - margin
+
   noPos.value = {
-    x: margin + Math.random() * (w - btnW - margin * 2),
-    y: margin + Math.random() * (h - btnH - margin * 2),
+    x: clamp(minX + Math.random() * Math.max(maxX - minX, 0), minX, maxX),
+    y: clamp(minY + Math.random() * Math.max(maxY - minY, 0), minY, maxY),
   }
+}
+
+function clampFloatingButtonToViewport() {
+  const viewport = getViewport()
+  const { width: btnW, height: btnH } = getFloatingButtonSize()
+  const margin = 20
+
+  const minX = viewport.offsetLeft + margin
+  const maxX = viewport.offsetLeft + viewport.width - btnW - margin
+  const minY = viewport.offsetTop + margin
+  const maxY = viewport.offsetTop + viewport.height - btnH - margin
+
+  noPos.value = {
+    x: clamp(noPos.value.x, minX, maxX),
+    y: clamp(noPos.value.y, minY, maxY),
+  }
+}
+
+async function sayNo() {
+  if (!noMoved.value) {
+    setFloatingStartFromStatic()
+    noMoved.value = true
+    noVisible.value = true
+
+    await nextTick()
+    await new Promise(resolve => requestAnimationFrame(resolve))
+
+    placeRandom()
+    return
+  }
+
+  noCount.value++
+  await nextTick()
+
+  if (noGone.value) {
+    return
+  }
+
+  placeRandom()
 }
 
 function sayYes() {
   won.value = true
 }
+
+onMounted(async () => {
+  await nextTick()
+  updateViewportMetrics()
+
+  window.addEventListener('resize', updateViewportMetrics)
+  window.addEventListener('orientationchange', updateViewportMetrics)
+  window.visualViewport?.addEventListener('resize', updateViewportMetrics)
+  window.visualViewport?.addEventListener('scroll', updateViewportMetrics)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateViewportMetrics)
+  window.removeEventListener('orientationchange', updateViewportMetrics)
+  window.visualViewport?.removeEventListener('resize', updateViewportMetrics)
+  window.visualViewport?.removeEventListener('scroll', updateViewportMetrics)
+})
 </script>
 
 <style>
@@ -148,7 +282,8 @@ html, body {
 
 .scene {
   position: relative; z-index: 1;
-  height: 100vh;
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   padding: 24px; text-align: center; gap: 48px;
